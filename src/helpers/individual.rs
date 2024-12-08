@@ -65,21 +65,25 @@ impl Individual {
         });
     }
 
-    pub fn crossover(&self, other: &Self, _crossover_rate: f64, id: usize) -> Self {
+    pub fn crossover(&self, other: &Self, crossover_rate: f64, id: usize) -> Self {
         let nb_pixels = self.array[0].len();
         let mut child = Self::empty(id, nb_pixels);
+        let mut rng = StdRng::from_entropy();
+
         (0..nb_pixels).for_each(|i| {
             let fitness_self = self.fitnesses[i];
             let fitness_other = other.fitnesses[i];
-            if fitness_self < fitness_other {
-                (0..3).for_each(|j| {
+            let total_fitness = fitness_self + fitness_other;
+            let prob_other = fitness_other / total_fitness;
+            let crossover_other = crossover_rate * prob_other;
+            let random_value = rng.gen::<f64>();
+            (0..3).for_each(|j| {
+                if random_value < crossover_other {
                     child.array[j][i] = self.array[j][i];
-                });
-            } else {
-                (0..3).for_each(|j| {
+                } else {
                     child.array[j][i] = other.array[j][i];
-                });
-            }
+                }
+            });
         });
 
         child.id = id;
