@@ -47,20 +47,42 @@ impl Individual {
                     .sum::<f64>()
             })
             .collect();
-        self.fitness = self.fitnesses.iter().sum::<f64>() / (self.fitnesses.len() as f64);
+        self.fitness = (self.fitnesses.iter().sum::<f64>() / (self.fitnesses.len() as f64)).sqrt();
     }
 
-    pub fn mutate(&mut self, mutation_rate: f64) {
-        let nb_pixels = self.array[0].len();
+    pub fn mutate(&mut self, mutation_rate: f64, mutation_range: f64, mutation_sections: usize) {
         let mut rng = StdRng::from_entropy();
-        let nb_mutations = (nb_pixels as f64 * mutation_rate).ceil() as usize;
-        let mutated_ids: Vec<usize> = (0..nb_mutations)
-            .map(|_| rng.gen_range(0..nb_pixels))
-            .collect();
+        let grid_size = self.array[0].len() / mutation_sections;
 
-        mutated_ids.iter().for_each(|&i| {
-            (0..3).for_each(|j| {
-                self.array[j][i] = (self.array[j][i] + rng.gen_range(-0.1..0.1)).clamp(0.0, 1.0);
+        (0..mutation_sections).for_each(|i| {
+            (0..mutation_sections).for_each(|j| {
+                let start_x = i;
+                let start_y = j;
+
+                let end_x = (i + grid_size).min(mutation_sections);
+                let end_y = (j + grid_size).min(mutation_sections);
+
+                let size_x = end_x - start_x;
+                let size_y = end_y - start_y;
+                let size = size_x * size_y;
+
+                let nb_mutations = (size as f64 * mutation_rate).ceil() as usize;
+                let mutations: Vec<(usize, usize, f64)> = (0..nb_mutations)
+                    .map(|_| {
+                        (
+                            rng.gen_range(start_x..end_x),
+                            rng.gen_range(start_y..end_y),
+                            rng.gen_range(-mutation_range..mutation_range),
+                        )
+                    })
+                    .collect();
+
+                mutations.iter().for_each(|&(i, j, mutation)| {
+                    (0..3).for_each(|k| {
+                        let index = i * grid_size + j;
+                        self.array[k][index] = (self.array[k][index] + mutation).clamp(0.0, 1.0);
+                    });
+                });
             });
         });
     }

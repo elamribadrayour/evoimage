@@ -1,9 +1,18 @@
 {
     "epochs": 1000,
-    "mutation_rate": 0.3,
+    "mutation": {
+        "rate": 0.4,
+        "range": 0.4,
+        "sections": 10
+    },
+    "early_stop": {
+        "window": 5,
+        "epochs": 100,
+        "fitness_threshold": 0.01,
+        "fitness_deviation": 0.01
+    },
     "selection_rate": 0.5,
     "crossover_rate": 0.5,
     "population_size": 100,
-    "success_threshold": 0.01,
     "target": "image.webp"
 }

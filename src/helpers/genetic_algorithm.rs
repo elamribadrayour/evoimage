@@ -2,19 +2,22 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
 use crate::helpers::image::{load_image, to_image};
-use crate::helpers::{Config, Individual};
+use crate::helpers::{Config, EarlyStop, Individual, Traces};
 
 pub struct GeneticAlgorithm {
     epochs: usize,
     mutation_rate: f64,
     selection_rate: f64,
     crossover_rate: f64,
-    success_threshold: f64,
+    mutation_range: f64,
+    mutation_sections: usize,
     population_size: usize,
+    early_stop: EarlyStop,
     population: Vec<Individual>,
     target: [Vec<f64>; 3],
     width: u32,
     height: u32,
+    traces: Traces,
 }
 
 impl GeneticAlgorithm {
@@ -32,17 +35,22 @@ impl GeneticAlgorithm {
             .map(|i| Individual::new(i, width * height))
             .collect();
 
+        let early_stop = EarlyStop::new(&config);
+
         let mut ga = Self {
             epochs: config.epochs,
-            mutation_rate: config.mutation_rate,
+            mutation_rate: config.mutation.rate,
+            mutation_range: config.mutation.range,
             selection_rate: config.selection_rate,
             crossover_rate: config.crossover_rate,
             population_size: config.population_size,
-            success_threshold: config.success_threshold,
+            mutation_sections: config.mutation.sections,
+            early_stop,
             population,
             target,
             width,
             height,
+            traces: Traces::new(),
         };
 
         log::info!("setting fitness");
@@ -80,7 +88,11 @@ impl GeneticAlgorithm {
 
     pub fn mutate(&mut self) {
         self.population.par_iter_mut().for_each(|individual| {
-            individual.mutate(self.mutation_rate);
+            individual.mutate(
+                self.mutation_rate,
+                self.mutation_range,
+                self.mutation_sections,
+            );
         });
     }
 
@@ -92,8 +104,9 @@ impl GeneticAlgorithm {
             .sort_by(|a, b| a.fitness.partial_cmp(&b.fitness).unwrap());
     }
 
-    pub fn save_best(&self, epoch: usize) -> f64 {
+    pub fn save_best(&mut self, epoch: usize) -> f64 {
         let best = self.population[0].clone();
+        self.traces.add(best.fitness);
         let image = to_image(&best.array, self.width, self.height);
         image
             .save(format!(".cache/images/epoch-{}.png", epoch))
@@ -113,11 +126,21 @@ impl GeneticAlgorithm {
     pub fn run(&mut self) {
         for epoch in 1..=self.epochs {
             let fitness = self.evolve(epoch);
-            println!("epoch: {} -- best fitness: {}", epoch, fitness);
-            if fitness < self.success_threshold {
-                println!("best fitness reached");
+            let (mean, deviation) = self.traces.get_deviation(self.early_stop.window);
+            log::info!(
+                "epoch: {} -- best fitness: {} -- mean: {} -- deviation: {}",
+                epoch,
+                fitness,
+                mean,
+                deviation
+            );
+            if fitness < self.early_stop.fitness_threshold
+                || (deviation < self.early_stop.fitness_deviation && epoch > self.early_stop.epochs)
+            {
+                log::info!("early stop reached");
                 break;
             }
         }
+        self.traces.save(".cache/traces.json");
     }
 }
